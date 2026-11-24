@@ -3,6 +3,48 @@
   let storageChanged = false;
   let inserting = false;
   let pendingEditorInput;
+  const observedRoots = new WeakSet();
+  const seenEvents = new WeakSet();
+
+  function shadowOf(element) {
+    try { return element.shadowRoot || chrome.dom?.openOrClosedShadowRoot(element); }
+    catch { return element.shadowRoot; }
+  }
+
+  function focusedElement(root = document) {
+    let element = root.activeElement;
+    while (element) {
+      const shadow = shadowOf(element);
+      if (!shadow) break;
+      observeRoot(shadow);
+      if (!shadow.activeElement) break;
+      element = shadow.activeElement;
+    }
+    return element;
+  }
+
+  function editableHost(element) {
+    if (!(element instanceof HTMLElement)) return null;
+    if (element instanceof HTMLTextAreaElement || element instanceof HTMLInputElement) return element;
+    if (!element.isContentEditable) return null;
+    while (element.parentElement?.isContentEditable) element = element.parentElement;
+    return element;
+  }
+
+  function targetOf(event) {
+    const active = focusedElement();
+    return event.composedPath().map(editableHost).find(Boolean) || editableHost(active) ||
+      (document.designMode === "on" ? document.body : null);
+  }
+
+  function observeRoot(root) {
+    if (observedRoots.has(root)) return;
+    observedRoots.add(root);
+    root.addEventListener("input", onInput, true);
+    root.addEventListener("keyup", onKeyUp, true);
+    root.addEventListener("beforeinput", onBeforeInput, true);
+  }
+
 
   function load(entries) {
     snippets = new Map(entries.map(({ name, body }) => [name, body]));
@@ -44,11 +86,29 @@
   }
 
   function insertIntoEditor(editor) {
-    if (!editor.isConnected) return;
+    if (!editor.isConnected || editor.matches("body.cke_editable")) return;
     const root = editor.getRootNode();
     const selection = root.getSelection?.() ?? document.getSelection();
-    if (!selection?.isCollapsed || !selection.rangeCount) return;
-    const caret = selection.getRangeAt(0);
+    if (!selection) return;
+    let caret;
+    // Chrome may retarget getRangeAt() to the shadow host, rather than the actual caret.
+    const shadowRoots = [];
+    for (let r = root; r instanceof ShadowRoot; r = r.host.getRootNode()) shadowRoots.push(r);
+    try {
+      const composed = document.getSelection()?.getComposedRanges?.({ shadowRoots })?.[0];
+      if (composed && composed.collapsed && editor.contains(composed.startContainer)) {
+        caret = document.createRange();
+        caret.setStart(composed.startContainer, composed.startOffset);
+        caret.collapse(true);
+      }
+    } catch { /* fall back to root selection */ }
+    if (!caret && selection.rangeCount && selection.isCollapsed) caret = selection.getRangeAt(0).cloneRange();
+    if (!caret && selection.anchorNode && selection.isCollapsed && editor.contains(selection.anchorNode)) {
+      caret = document.createRange();
+      caret.setStart(selection.anchorNode, selection.anchorOffset);
+      caret.collapse(true);
+    }
+    if (!caret) return;
     let node = caret.startContainer;
     let offset = caret.startOffset;
     if (!editor.contains(node)) return;
@@ -96,6 +156,9 @@
     }
     selection.removeAllRanges();
     selection.addRange(replacement);
+    // Explicit base/extent helps Chromium keep the selection inside a shadow tree.
+    try { selection.setBaseAndExtent(replacement.startContainer, replacement.startOffset,
+      replacement.endContainer, replacement.endOffset); } catch { /* range already selected */ }
     if (editor.matches('[data-lexical-editor="true"]')) {
       // Synchronize Lexical's selection before sending the replacement. The
       // browser queues its own selectionchange for a later task.
@@ -119,50 +182,88 @@
       });
       if (!editor.dispatchEvent(input)) return;
     }
-    if (!document.execCommand("insertText", false, match.text)) {
-      selection.removeAllRanges();
-      selection.addRange(caret);
-    }
+    const previousText = editor.textContent;
+    if (document.execCommand("insertText", false, match.text)) return;
+    if (editor.textContent !== previousText) return;
+    // Editors such as Quill and CKEditor may handle a paste via their own model.
+    // No system clipboard access: this is an in-memory ClipboardEvent.
+    const transfer = new DataTransfer();
+    transfer.setData("text/plain", match.text);
+    const accepted = !editor.dispatchEvent(new ClipboardEvent("paste", {
+      bubbles: true, cancelable: true, composed: true, clipboardData: transfer
+    }));
+    if (accepted || editor.textContent !== previousText) return;
+    // Last resort for standard contenteditable: replace only the matched range.
+    if (!replacement.startContainer.isConnected || !replacement.endContainer.isConnected ||
+        replacement.toString().toLowerCase() !== prefix.slice(-match.length).toLowerCase()) return;
+    const fragment = document.createDocumentFragment();
+    const lines = match.text.split(/\r?\n/);
+    lines.forEach((line, i) => {
+      if (i) fragment.append(document.createElement("br"));
+      fragment.append(document.createTextNode(line));
+    });
+    const last = fragment.lastChild;
+    replacement.deleteContents();
+    replacement.insertNode(fragment);
+    const end = document.createRange();
+    end.setStartAfter(last);
+    end.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(end);
+    editor.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true,
+      inputType: "insertText", data: match.text }));
   }
 
-  function isTypedInput(event) {
-    return !inserting && event.isTrusted && !event.isComposing &&
-      ["insertText", "insertCompositionText"].includes(event.inputType) &&
-      /[a-z0-9_-]$/i.test(event.data ?? "");
-  }
-
-  document.addEventListener("input", event => {
-    if (!isTypedInput(event)) return;
-    const origin = event.composedPath()[0];
-    if (!(origin instanceof HTMLElement)) return;
-    const editor = origin.isContentEditable ? origin :
-      document.designMode === "on" ? document.body : null;
-    if (!editor) return;
-
-    // Rich editors can stop bubbling and reconcile their own DOM on input.
-    clearTimeout(pendingEditorInput);
-    pendingEditorInput = setTimeout(() => {
-      if (document.designMode !== "on" && editor.getRootNode().activeElement !== editor) return;
-      inserting = true;
-      try {
-        insertIntoEditor(editor);
-      } finally {
-        inserting = false;
-      }
-    }, 0);
-  }, { capture: true });
-
-  document.addEventListener("input", event => {
-    if (!isTypedInput(event)) return;
-    const origin = event.composedPath()[0];
+  function run(target) {
+    if (!target?.isConnected || inserting) return;
+    const active = focusedElement();
+    if (document.designMode !== "on" && editableHost(active) !== target && !target.contains(active) && !target.matches(":focus-within")) return;
     inserting = true;
     try {
-      if (origin instanceof HTMLTextAreaElement ||
-          (origin instanceof HTMLInputElement && ["text", "search", "tel", "url"].includes(origin.type))) {
-        insertIntoField(origin);
+      if (target instanceof HTMLTextAreaElement ||
+          (target instanceof HTMLInputElement && ["text", "search", "tel", "url"].includes(target.type))) {
+        insertIntoField(target);
+      } else if (target.isContentEditable || document.designMode === "on") {
+        insertIntoEditor(target);
       }
-    } finally {
-      inserting = false;
+    } catch (error) {
+      console.debug("Atalho Pronto: editor incompatível", error.name);
+    } finally { inserting = false; }
+  }
+
+  function schedule(target) {
+    if (!target) return;
+    clearTimeout(pendingEditorInput);
+    pendingEditorInput = setTimeout(() => run(target), 0);
+  }
+
+  function onBeforeInput(event) {
+    if (inserting || !event.isTrusted || event.isComposing) return;
+    if (event.inputType === "insertText" && /[a-z0-9_-]$/i.test(event.data ?? "")) {
+      const target = targetOf(event);
+      if (target?.isContentEditable || document.designMode === "on") schedule(target);
     }
-  }, { capture: true });
+  }
+
+  function onInput(event) {
+    if (seenEvents.has(event) || inserting || !event.isTrusted || event.isComposing) return;
+    seenEvents.add(event);
+    if (!["insertText", "insertCompositionText", ""].includes(event.inputType || "")) return;
+    if (event.data != null && !/[a-z0-9_-]$/i.test(event.data)) return;
+    const target = targetOf(event);
+    if (target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement) run(target);
+    else schedule(target);
+  }
+
+  function onKeyUp(event) {
+    if (seenEvents.has(event) || inserting || !event.isTrusted || event.isComposing ||
+        event.ctrlKey || event.metaKey || event.altKey || !/^[a-z0-9_-]$/i.test(event.key)) return;
+    seenEvents.add(event);
+    // Only inspect actual text at the caret, never a global keystroke buffer.
+    schedule(targetOf(event));
+  }
+
+  observeRoot(document);
+  document.addEventListener("focusin", () => focusedElement(), true);
+  document.addEventListener("keydown", () => focusedElement(), true);
 })();

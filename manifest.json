@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Atalho Pronto",
-  "version": "1.2.1",
+  "version": "1.3.2",
   "description": "Expanda textos automaticamente ao digitar /atalho.",
   "permissions": [
     "storage"
@@ -16,7 +16,8 @@
       ],
       "js": [
         "model.js",
-        "expand.js"
+        "expand.js",
+        "ckeditor.js"
       ],
       "run_at": "document_start",
       "all_frames": true,

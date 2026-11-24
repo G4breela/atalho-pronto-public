@@ -30,3 +30,17 @@ endereços, em páginas chrome:// e na Chrome Web Store. Campos de senha
 são ignorados. Editores que desenham o texto em canvas ou usam controles
 não compatíveis podem não funcionar. Para páginas file://, habilite
 "Permitir acesso a URLs de arquivo" nos detalhes da extensão.
+
+VERSÃO 1.3.0 — compatibilidade com editores ricos
+Mantém a chave de armazenamento snippets e a interface da versão 1.2.1.
+Detecta o elemento focado dentro de Shadow DOM, inclusive fechado quando
+acessível pela API do Chrome. Usa input e keyup para detectar atalhos.
+Tenta inserção nativa e, quando esta falha, um evento de colagem em memória.
+Não usa a área de transferência do sistema nem envia dados para servidores.
+Para testar no Salesforce: recarregue a extensão e a aba, abra um rascunho
+sem dados reais e digite /oi no corpo do e-mail e no campo de assunto.
+Confira o texto e as quebras de linha antes de salvar ou enviar.
+Compatibilidade com o editor específico do Salesforce ainda não validada.
+
+1.3.2: tratamento específico do body editável do CKEditor, com redescoberta
+ de iframes no Salesforce. A inserção substitui apenas o comando selecionado.
