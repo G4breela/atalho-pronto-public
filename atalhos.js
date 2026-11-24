@@ -18,7 +18,7 @@ function notify(message, error = false) {
 function selectSnippet(snippet = null) {
   editing = snippet?.name ?? null;
   nameField.value = snippet?.name ?? "";
-  bodyField.value = snippet?.body ?? "";
+  bodyField.innerHTML = typeof snippet?.html === "string" ? cleanRich(snippet.html) : plainRich(snippet?.body ?? "");
   title.textContent = snippet ? "Editar atalho" : "Novo atalho";
   cancel.hidden = !snippet;
   if (snippet) nameField.focus();
@@ -79,7 +79,9 @@ form.addEventListener("submit", event => {
   event.preventDefault();
   if (busy) return;
   const name = nameField.value.trim().toLowerCase().replace(/^\//, "");
-  const body = bodyField.value;
+  const html = cleanRich(bodyField.innerHTML);
+  const temp = document.createElement("template"); temp.innerHTML = html;
+  const body = richPlain(temp.content);
   if (!namePattern.test(name)) {
     notify("Use de 1 a 40 letras sem acento, números, hífen ou sublinhado.", true);
     return;
@@ -94,7 +96,7 @@ form.addEventListener("submit", event => {
     notify("Escolha um nome diferente. /" + conflict.name + " coincide com este atalho ou com seu início.", true);
     return;
   }
-  const next = [...others, { name, body }].sort((a, b) => a.name.localeCompare(b.name));
+  const next = [...others, { name, body, html }].sort((a, b) => a.name.localeCompare(b.name));
   commit(next, "Atalho /" + name + " salvo.", true);
 });
 
@@ -104,8 +106,8 @@ cancel.onclick = () => {
 
 for (const button of document.querySelectorAll("[data-token]")) {
   button.onclick = () => {
-    bodyField.setRangeText(button.dataset.token, bodyField.selectionStart, bodyField.selectionEnd, "end");
-    bodyField.focus();
+    restoreEditorSelection();
+    document.execCommand("insertText", false, button.dataset.token);
   };
 }
 
@@ -114,3 +116,49 @@ chrome.storage.local.get({ [snippetKey]: defaultSnippets }).then(result => {
   render();
   save.disabled = false;
 }).catch(() => notify("Falha ao carregar os atalhos.", true));
+
+let savedRange = null;
+function rememberSelection(){const s=document.getSelection();if(s?.rangeCount && bodyField.contains(s.anchorNode) && bodyField.contains(s.focusNode))savedRange=s.getRangeAt(0).cloneRange();}
+document.addEventListener('selectionchange',rememberSelection);
+function restoreEditorSelection(){bodyField.focus();const s=document.getSelection();if(savedRange && bodyField.contains(savedRange.startContainer) && bodyField.contains(savedRange.endContainer)){s.removeAllRanges();s.addRange(savedRange);}else{const r=document.createRange();r.selectNodeContents(bodyField);r.collapse(false);s.removeAllRanges();s.addRange(r);}}
+for(const b of document.querySelectorAll('[data-format], [data-token]'))b.addEventListener('mousedown',e=>e.preventDefault());
+for(const b of document.querySelectorAll('[data-format]'))b.addEventListener('click',()=>{let value=null;if(b.dataset.format==='createLink'){value=prompt('URL do link (https://, mailto: ou tel:)');if(!value || !/^(https?:\/\/|mailto:|tel:)/i.test(value.trim()))return;}restoreEditorSelection();document.execCommand(b.dataset.format,false,value);rememberSelection();});
+// Remove only clipboard padding at the edges; keep internal paragraphs and formatting.
+function cleanClipboardHtml(html) {
+  const t = document.createElement('template');
+  t.innerHTML = cleanRich(html);
+  const blank = /^[\s\u00a0\u200b\ufeff]*$/;
+  const containers = /^(DIV|P|SPAN|B|STRONG|I|EM|U|S|STRIKE|DEL|FONT|A|BLOCKQUOTE|CODE|SUB|SUP|H[1-6])$/;
+  function trimEdge(parent, first) {
+    while (parent.childNodes.length) {
+      const node = first ? parent.firstChild : parent.lastChild;
+      if (node.nodeType === Node.TEXT_NODE) {
+        if (blank.test(node.data)) { node.remove(); continue; }
+        // Remove boundary newline padding, but retain ordinary inline spaces.
+        node.data = first ? node.data.replace(/^(?:[^\S\r\n]*[\r\n])+[^\S\r\n]*/, '')
+                          : node.data.replace(/(?:[\r\n][^\S\r\n]*)+$/, '');
+        break;
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) { node.remove(); continue; }
+      if (node.tagName === 'BR') { node.remove(); continue; }
+      if (!containers.test(node.tagName)) break; // preserve lists, tables and preformatted blocks
+      trimEdge(node, first);
+      if (!node.hasChildNodes()) { node.remove(); continue; }
+      break;
+    }
+  }
+  trimEdge(t.content, true);
+  trimEdge(t.content, false);
+  return t.innerHTML;
+}
+function cleanClipboardText(text) {
+  return text.replace(/^(?:[^\S\r\n]*\r?\n)+/, '').replace(/(?:\r?\n[^\S\r\n]*)+$/, '');
+}
+bodyField.addEventListener('paste', e => {
+  e.preventDefault();
+  const html = e.clipboardData.getData('text/html');
+  const safe = html ? cleanClipboardHtml(html) : '';
+  if (safe) document.execCommand('insertHTML', false, safe);
+  else document.execCommand('insertText', false, cleanClipboardText(e.clipboardData.getData('text/plain')));
+});
+bodyField.addEventListener('drop',e=>e.preventDefault());

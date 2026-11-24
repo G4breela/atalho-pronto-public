@@ -4,7 +4,7 @@
   const bound = new WeakSet(), frames = new WeakSet();
   const busy = new WeakSet();
   let snippets = new Map(), changed = false;
-  const load = entries => { snippets = new Map(entries.map(x => [x.name, x.body])); };
+  const load = entries => { snippets = new Map(entries.map(x => [x.name, x])); };
   chrome.storage.onChanged.addListener((c,a) => { if(a === 'local' && c[snippetKey]) { changed=true; load(c[snippetKey].newValue ?? defaultSnippets); } });
   chrome.storage.local.get({[snippetKey]:defaultSnippets}).then(r=>{if(!changed)load(r[snippetKey]);}).catch(()=>{});
   function expand(body) {
@@ -34,8 +34,10 @@
     let left=m[1].length+1;const range=doc.createRange();range.setEnd(node,offset);
     for(const seg of segments.reverse()){if(left<=seg.length){range.setStart(seg.node,seg.end-left);break;}left-=seg.length;}
     if(range.toString().toLowerCase()!==('/'+m[1]).toLowerCase())return;
-    const text=fillTemplate(template), box=doc.createElement('div');
+    const text=fillTemplate(template.body), box=doc.createElement('div');
     text.split(/\r\n|\r|\n/).forEach((line,i)=>{if(i)box.append(doc.createElement('br'));box.append(doc.createTextNode(line));});
+    const html=expandedRich(template,doc);if(html!==null)box.innerHTML=html;
+    if(!box.firstChild)return;
     sel.removeAllRanges();sel.addRange(range);
     // Native edit preserves browser undo and emits input for CKEditor.
     if(doc.execCommand('insertHTML',false,box.innerHTML))return;

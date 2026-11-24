@@ -46,3 +46,10 @@ Compatibilidade com o editor específico do Salesforce ainda não validada.
  de iframes no Salesforce. A inserção substitui apenas o comando selecionado.
 
 Versão 1.3.3: CKEditor com captura em window/document/body, observação local de alterações de texto e registro por identidade do elemento, independente de spellcheck e data-qb-tmp-id.
+
+VERSÃO 1.4.0 — Texto formatado
+Cole o conteúdo no novo editor ou use a barra de formatação. Os atalhos
+antigos continuam funcionando; ao editar e salvar, passam a ter HTML e texto simples.
+O HTML é sanitizado; imagens, scripts e controles interativos não são mantidos.
+Campos comuns recebem texto simples, com numeração/marcadores quando aplicável.
+A formatação final depende do editor de destino. Teste no rascunho antes de enviar.

@@ -6,6 +6,7 @@
   <title>Atalho Pronto</title>
   <link rel="stylesheet" href="atalhos.css">
   <script defer src="model.js"></script>
+  <script defer src="rich.js"></script>
   <script defer src="atalhos.js"></script>
 </head>
 <body>
@@ -24,8 +25,23 @@
       <form id="editor">
         <label for="name">Nome do atalho</label>
         <div class="name-field"><span aria-hidden="true">/</span><input id="name" required maxlength="40" placeholder="assinatura" autocomplete="off" spellcheck="false"></div>
-        <label for="body">Texto da expansão</label>
-        <textarea id="body" required rows="6" maxlength="10000" placeholder="Digite o texto que será inserido"></textarea>
+        <label id="body-label">Texto da expansão</label>
+        <div class="rich-editor">
+        <div class="formatbar" role="toolbar" aria-label="Formatação">
+          <button type="button" data-format="bold" title="Negrito"><b>B</b></button>
+          <button type="button" data-format="italic" title="Itálico"><i>I</i></button>
+          <button type="button" data-format="underline" title="Sublinhado"><u>U</u></button>
+          <button type="button" data-format="strikeThrough" title="Tachado"><s>S</s></button>
+          <button type="button" data-format="insertOrderedList" title="Lista numerada" aria-label="Lista numerada"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h12M9 12h12M9 19h12M3 3h2v4M3 10h2l-2 4h2M3 17h2v4H3"/></svg></button>
+          <button type="button" data-format="insertUnorderedList" title="Lista com marcadores" aria-label="Lista com marcadores"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h12M9 12h12M9 19h12"/><circle cx="4" cy="5" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="19" r="1"/></svg></button>
+          <button type="button" data-format="justifyLeft" title="Alinhar à esquerda" aria-label="Alinhar à esquerda"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18M3 10h12M3 15h18M3 20h12"/></svg></button>
+          <button type="button" data-format="justifyCenter" title="Centralizar" aria-label="Centralizar"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5h18M6 10h12M3 15h18M6 20h12"/></svg></button>
+          <button type="button" data-format="createLink" title="Inserir link" aria-label="Inserir link"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13l4-4m-6 7-2 2a4 4 0 0 1-6-6l5-5a4 4 0 0 1 6 0m2 2 2-2a4 4 0 0 1 6 6l-5 5a4 4 0 0 1-6 0" transform="translate(1 0) scale(.9)"/></svg></button>
+          <button type="button" data-format="removeFormat" title="Limpar formatação" aria-label="Limpar formatação"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4h15M10 4l-4 12m6 1 7 5m0-5-7 5"/></svg></button>
+        </div>
+        <div id="body" contenteditable="true" role="textbox" aria-multiline="true" aria-labelledby="body-label" data-placeholder="Cole ou digite o texto formatado"></div>
+        </div>
+        <small>Formatação preservada em editores compatíveis. Campos simples recebem apenas texto.</small>
         <div class="tokens">
           <button type="button" data-token="{{data}}">+ Data atual</button>
           <button type="button" data-token="{{hora}}">+ Hora atual</button>

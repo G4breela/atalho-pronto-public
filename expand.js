@@ -47,7 +47,7 @@
 
 
   function load(entries) {
-    snippets = new Map(entries.map(({ name, body }) => [name, body]));
+    snippets = new Map(entries.map(entry => [entry.name, entry]));
   }
 
   chrome.storage.onChanged.addListener((changes, area) => {
@@ -65,7 +65,7 @@
     const match = suffixPattern.exec(text);
     if (!match) return null;
     const body = snippets.get(match[1].toLowerCase());
-    return body === undefined ? null : { length: match[1].length + 1, text: fillTemplate(body) };
+    return body === undefined ? null : { length: match[1].length + 1, text: fillTemplate(body.body), html: expandedRich(body) };
   }
 
   function insertIntoField(field) {
@@ -86,7 +86,7 @@
   }
 
   function insertIntoEditor(editor) {
-    if (!editor.isConnected || editor.matches("body.cke_editable")) return;
+    if (!editor.isConnected || editor.matches("body.cke_editable, body[data-atalho-pronto-mce-bound]")) return;
     const root = editor.getRootNode();
     const selection = root.getSelection?.() ?? document.getSelection();
     if (!selection) return;
@@ -159,7 +159,7 @@
     // Explicit base/extent helps Chromium keep the selection inside a shadow tree.
     try { selection.setBaseAndExtent(replacement.startContainer, replacement.startOffset,
       replacement.endContainer, replacement.endOffset); } catch { /* range already selected */ }
-    if (editor.matches('[data-lexical-editor="true"]')) {
+    if (match.html === null && editor.matches('[data-lexical-editor="true"]')) {
       // Synchronize Lexical's selection before sending the replacement. The
       // browser queues its own selectionchange for a later task.
       root.dispatchEvent(new Event("selectionchange"));
@@ -183,12 +183,13 @@
       if (!editor.dispatchEvent(input)) return;
     }
     const previousText = editor.textContent;
-    if (document.execCommand("insertText", false, match.text)) return;
+    if (document.execCommand(match.html !== null && editor.getAttribute("contenteditable") !== "plaintext-only" ? "insertHTML" : "insertText", false, match.html !== null && editor.getAttribute("contenteditable") !== "plaintext-only" ? match.html : match.text)) return;
     if (editor.textContent !== previousText) return;
     // Editors such as Quill and CKEditor may handle a paste via their own model.
     // No system clipboard access: this is an in-memory ClipboardEvent.
     const transfer = new DataTransfer();
     transfer.setData("text/plain", match.text);
+    if (match.html !== null && editor.getAttribute("contenteditable") !== "plaintext-only") transfer.setData("text/html", match.html);
     const accepted = !editor.dispatchEvent(new ClipboardEvent("paste", {
       bubbles: true, cancelable: true, composed: true, clipboardData: transfer
     }));
@@ -202,7 +203,9 @@
       if (i) fragment.append(document.createElement("br"));
       fragment.append(document.createTextNode(line));
     });
+    if (match.html !== null && editor.getAttribute("contenteditable") !== "plaintext-only") { const t = document.createElement("template"); t.innerHTML = match.html; fragment.replaceChildren(t.content); }
     const last = fragment.lastChild;
+    if (!last) return;
     replacement.deleteContents();
     replacement.insertNode(fragment);
     const end = document.createRange();

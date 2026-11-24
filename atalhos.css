@@ -105,3 +105,24 @@ li { padding: 13px 14px; display: flex; align-items: center; gap: 8px; }
   .workspace { grid-template-columns: minmax(0, 1fr); gap: 24px; padding-top: 22px; }
   .editor-card { padding: 16px; }
 }
+.formatbar { display:flex; flex-wrap:wrap; gap:5px; }
+.formatbar button { padding:5px 9px; }
+#body { min-height:180px; max-height:55vh; overflow:auto; border:1px solid #c6d6c9; border-radius:8px; padding:12px; background:white; overflow-wrap:anywhere; white-space:pre-wrap; }
+#body:empty::before { content:attr(data-placeholder); color:#718078; pointer-events:none; }
+#body p { margin:0 0 .5em; }
+#body ul, #body ol { padding-left:24px; margin:8px 0; display:block; }
+#body ul { list-style:disc; }
+#body ol { list-style:decimal; }
+#body li { display:list-item; border:0; padding:0; border-radius:0; background:transparent; }
+
+/* Editor integrado: mantém a identidade visual original. */
+.rich-editor { border:1px solid #c6d6c9; border-radius:9px; background:#fff; min-width:0; }
+.rich-editor:focus-within { border-color:#287a4b; }
+.formatbar { gap:2px; padding:5px 6px; align-items:center; border-bottom:1px solid #d9e4d8; background:#f4f7f2; border-radius:8px 8px 0 0; }
+.formatbar button { display:inline-flex; align-items:center; justify-content:center; width:29px; height:29px; padding:0; border:1px solid transparent; border-radius:4px; background:transparent; color:#1d2d27; font-size:16px; }
+.formatbar button:hover { background:#d9e4d8; border-color:#c6d6c9; }
+.formatbar button:nth-child(5) { margin-left:5px; }
+.formatbar button svg { width:17px; height:17px; }
+#body { border:0; border-radius:0 0 8px 8px; min-height:240px; padding:12px; line-height:1.55; }
+#body:focus-visible { outline:none; }
+#body li { box-shadow:none; }
