@@ -2,13 +2,14 @@
 // Attach to the actual editable body, including same-origin nested frames.
 (() => {
   const bound = new WeakSet(), frames = new WeakSet();
+  const busy = new WeakSet();
   let snippets = new Map(), changed = false;
   const load = entries => { snippets = new Map(entries.map(x => [x.name, x.body])); };
   chrome.storage.onChanged.addListener((c,a) => { if(a === 'local' && c[snippetKey]) { changed=true; load(c[snippetKey].newValue ?? defaultSnippets); } });
   chrome.storage.local.get({[snippetKey]:defaultSnippets}).then(r=>{if(!changed)load(r[snippetKey]);}).catch(()=>{});
   function expand(body) {
     const doc=body.ownerDocument, sel=doc.getSelection();
-    if(!body.isConnected || !doc.hasFocus() || !sel?.isCollapsed || !sel.rangeCount) return;
+    if(!body.isConnected || !body.isContentEditable || !doc.hasFocus() || !sel?.isCollapsed || !sel.rangeCount) return;
     const caret=sel.getRangeAt(0);
     if(!body.contains(caret.startContainer)) return;
     let node=caret.startContainer, offset=caret.startOffset;
@@ -45,14 +46,65 @@
     body.dispatchEvent(new doc.defaultView.InputEvent('input',{bubbles:true,composed:true,inputType:'insertText',data:text}));
   }
   function bind(body){
-    if(bound.has(body) || body.hasAttribute('data-atalho-pronto-cke-bound'))return;bound.add(body);body.setAttribute('data-atalho-pronto-cke-bound','');
-    let pending;
-    const schedule=e=>{if(!e.isTrusted || e.isComposing)return;
+    if(bound.has(body))return;bound.add(body);body.setAttribute('data-atalho-pronto-cke-bound','');
+    const doc = body.ownerDocument, win = doc.defaultView;
+    let pending, retry, lastAttempt = 0, lastSelection = null;
+    function attempt() {
+      if (busy.has(body) || !body.isConnected || !doc.hasFocus()) return;
+      const sel = doc.getSelection();
+      if (!sel?.isCollapsed || !sel.rangeCount || !body.contains(sel.anchorNode)) return;
+      // Skip identical caret/text snapshots (including our own mutation records).
+      const node = sel.anchorNode, offset = sel.anchorOffset;
+      const value = node.nodeType === 3 ? node.data : (node.childNodes[offset-1]?.textContent ?? '');
+      if (lastSelection?.node === node && lastSelection.offset === offset && lastSelection.value === value) return;
+      lastSelection = {node,offset,value};
+      busy.add(body);
+      try { expand(body); } catch(e) { console.debug('Atalho Pronto: CKEditor',e.name); }
+      finally {
+        busy.delete(body);
+        observer.takeRecords();
+        const after = doc.getSelection();
+        if (after?.anchorNode) {
+          const n=after.anchorNode,o=after.anchorOffset;
+          lastSelection={node:n,offset:o,value:n.nodeType===3?n.data:(n.childNodes[o-1]?.textContent??'')};
+        }
+      }
+    }
+    function queue() {
+      clearTimeout(pending); clearTimeout(retry);
+      pending=setTimeout(attempt, 0);
+      // Some spelling tools reconcile the editable DOM after the native input.
+      retry=setTimeout(attempt, 100);
+    }
+    function schedule(e) {
+      if(!e.isTrusted || e.isComposing || busy.has(body))return;
       if(e.type==='keyup' && (e.ctrlKey||e.altKey||e.metaKey||!(/^[a-z0-9_-]$/i.test(e.key))))return;
-      if(e.type==='input' && e.inputType && !e.inputType.startsWith('insert'))return;
-      clearTimeout(pending);pending=setTimeout(()=>{try{expand(body);}catch(e){console.debug('Atalho Pronto: CKEditor',e.name);}},0);
-    };
-    body.addEventListener('input',schedule,true);body.addEventListener('keyup',schedule,true);
+      if((e.type==='input'||e.type==='beforeinput') && e.inputType && !e.inputType.startsWith('insert'))return;
+      if(e.target!==body && !body.contains(e.target))return;
+      lastAttempt=Date.now(); lastSelection=null; queue();
+    }
+    // Window capture precedes most editor/grammar-extension listeners.
+    for (const target of [win,doc,body]) {
+      for(const type of ['beforeinput','input','keyup']) target.addEventListener(type,schedule,true);
+    }
+    // Fallback for tools that replace text nodes or suppress input bubbling.
+    const observer = new win.MutationObserver(records => {
+      if(busy.has(body)||!doc.hasFocus()||!body.isConnected)return;
+      const sel=doc.getSelection(); if(!sel?.isCollapsed||!body.contains(sel.anchorNode))return;
+      const anchor=sel.anchorNode;
+      if(records.some(r=>r.target===anchor || (r.type==='childList' && [...r.addedNodes].some(n=>n===anchor||n.contains(anchor))) || (r.type==='childList' && r.target===anchor))) {
+        if(Date.now()-lastAttempt>500) lastSelection=null;
+        queue();
+      }
+    });
+    observer.observe(body,{subtree:true,childList:true,characterData:true});
+    // Remove document/window listeners if CKEditor replaces the body.
+    const lifecycle = new win.MutationObserver(()=>{
+      if(body.isConnected)return;
+      observer.disconnect(); lifecycle.disconnect(); clearTimeout(pending);clearTimeout(retry);
+      for(const target of [win,doc,body])for(const type of ['beforeinput','input','keyup'])target.removeEventListener(type,schedule,true);
+    });
+    lifecycle.observe(doc,{subtree:true,childList:true});
   }
   function scan(root,depth=0){
     if(!root||depth>12)return;
