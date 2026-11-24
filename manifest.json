@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Atalho Pronto",
+  "version": "1.2.1",
+  "description": "Expanda textos automaticamente ao digitar /atalho.",
+  "permissions": [
+    "storage"
+  ],
+  "action": {
+    "default_title": "Abrir Atalho Pronto"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "model.js",
+        "expand.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true,
+      "match_origin_as_fallback": true
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

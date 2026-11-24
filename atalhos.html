@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Atalho Pronto</title>
+  <link rel="stylesheet" href="atalhos.css">
+  <script defer src="model.js"></script>
+  <script defer src="atalhos.js"></script>
+</head>
+<body>
+  <header>
+    <div class="shell heading">
+      <span class="mark" aria-hidden="true">/</span>
+      <div>
+        <h1>Atalho Pronto</h1>
+        <p>Digite <code>/atalho</code> em um campo de texto para expandir na hora.</p>
+      </div>
+    </div>
+  </header>
+  <main class="shell workspace">
+    <section class="editor-card" aria-labelledby="form-title">
+      <h2 id="form-title">Novo atalho</h2>
+      <form id="editor">
+        <label for="name">Nome do atalho</label>
+        <div class="name-field"><span aria-hidden="true">/</span><input id="name" required maxlength="40" placeholder="assinatura" autocomplete="off" spellcheck="false"></div>
+        <label for="body">Texto da expansão</label>
+        <textarea id="body" required rows="6" maxlength="10000" placeholder="Digite o texto que será inserido"></textarea>
+        <div class="tokens">
+          <button type="button" data-token="{{data}}">+ Data atual</button>
+          <button type="button" data-token="{{hora}}">+ Hora atual</button>
+          <button type="button" data-token="{{hora+4}}" title="Soma quatro horas e arredonda para cima até a hora cheia">+ Hora em 4 h</button>
+        </div>
+        <div class="actions"><button id="cancel" type="button" hidden>Cancelar</button><button class="primary" id="save" disabled>Salvar atalho</button></div>
+      </form>
+      <p id="status" role="status"></p>
+    </section>
+    <section class="saved" aria-labelledby="saved-title">
+      <h2 id="saved-title">Meus atalhos</h2>
+      <ul id="snippets"></ul>
+    </section>
+  </main>
+</body>
+</html>

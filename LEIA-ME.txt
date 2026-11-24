@@ -1,0 +1,32 @@
+ATALHO PRONTO · Extensão para Google Chrome
+
+1. Extraia o ZIP.
+2. Abra chrome://extensions no Chrome.
+3. Ative o Modo do desenvolvedor.
+4. Clique em Carregar sem compactação e escolha a pasta atalho-pronto.
+5. Recarregue as abas abertas. Em uma página comum, digite /oi no início
+   de um campo de texto. A frase aparece ao digitar a última letra.
+
+Para atualizar, substitua os arquivos na pasta já carregada e clique no
+ícone de recarregar do Atalho Pronto em chrome://extensions. Recarregue
+as abas onde você usa os atalhos.
+
+Clique no ícone da extensão para abrir a página de atalhos em uma aba.
+Nela você pode criar, editar e excluir atalhos. O nome deve ter de 1 a 40 letras sem acento, números, hífen ou sublinhado. Digite /atalho
+no início do campo ou depois de um espaço ou quebra de linha. Os atalhos
+não podem ser iguais nem começar com o nome completo de outro atalho,
+pois a expansão acontece imediatamente.
+
+Use {{data}} e {{hora}} para inserir a data e a hora atuais do dispositivo.
+O botão Hora em 4 h insere {{hora+4}}. Ao expandir o atalho, o Chrome soma
+quatro horas à hora atual e arredonda para cima até a hora cheia.
+Por exemplo, às 05:52 a expansão insere 10:00.
+Os atalhos ficam salvos no perfil local do navegador.
+
+A extensão funciona em campos de texto compatíveis de páginas, incluindo
+áreas de texto e editores HTML como o Online Notepad (onlinenotepad.io).
+O Chrome bloqueia extensões na barra de
+endereços, em páginas chrome:// e na Chrome Web Store. Campos de senha
+são ignorados. Editores que desenham o texto em canvas ou usam controles
+não compatíveis podem não funcionar. Para páginas file://, habilite
+"Permitir acesso a URLs de arquivo" nos detalhes da extensão.
